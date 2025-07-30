@@ -1,32 +1,30 @@
+
 import streamlit as st
 import time
 import base64
 import os
-from datetime import datetime
 
-# 頁面設定
 st.set_page_config(page_title="多任務倒數計時器", layout="centered")
 
 # 初始化 session_state
 if "timers" not in st.session_state:
     st.session_state.timers = {}
 if "focus_timer" not in st.session_state:
-    st.session_state.focus_timer = None  # 任務放大模式
+    st.session_state.focus_timer = None
 
-# 音效：ding.mp3 播放
 def play_sound():
     sound_path = os.path.join(os.path.dirname(__file__), "ding.mp3")
     if os.path.exists(sound_path):
         with open(sound_path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
-            st.markdown(f"""
+            st.markdown(f'''
                 <audio autoplay>
                 <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
                 </audio>
-            """, unsafe_allow_html=True)
+            ''', unsafe_allow_html=True)
 
-# 加入新任務表單（只在列表模式顯示）
 if st.session_state.focus_timer is None:
+    st.markdown('<meta http-equiv="refresh" content="1">', unsafe_allow_html=True)
     st.title("⏱️ 多任務倒數計時器")
     with st.form("add_timer"):
         name = st.text_input("📝 任務名稱", "")
@@ -43,7 +41,6 @@ if st.session_state.focus_timer is None:
                 "completed": False
             }
 
-# 更新所有任務的剩餘時間
 def update_timers():
     for timer in st.session_state.timers.values():
         if timer["running"] and not timer["completed"]:
@@ -59,7 +56,6 @@ def update_timers():
 
 update_timers()
 
-# 顯示單一任務（放大模式）
 if st.session_state.focus_timer:
     timer = st.session_state.timers[st.session_state.focus_timer]
     st.title(f"🔍 專注任務：{timer['name']}")
@@ -71,7 +67,6 @@ if st.session_state.focus_timer:
         time.sleep(1)
         update_timers()
 
-    # 最後顯示狀態
     mins, secs = divmod(int(timer["remaining"]), 60)
     timer_placeholder.markdown(f"<h1 style='text-align:center;font-size:100px'>{mins:02d}:{secs:02d}</h1>", unsafe_allow_html=True)
     if timer["completed"]:
@@ -79,9 +74,8 @@ if st.session_state.focus_timer:
 
     if st.button("返回任務列表"):
         st.session_state.focus_timer = None
-        st.experimental_rerun()
+        st.stop()
 
-# 顯示任務列表（一般模式）
 else:
     remove_list = []
     for key, timer in st.session_state.timers.items():
@@ -104,14 +98,10 @@ else:
         with col4:
             if st.button("🔍 放大", key=f"focus_{key}"):
                 st.session_state.focus_timer = key
-                st.experimental_rerun()
+                st.stop()
         with col5:
             if st.button("❌", key=f"delete_{key}"):
                 remove_list.append(key)
 
     for key in remove_list:
         del st.session_state.timers[key]
-
-    # 自動每秒刷新，只在任務列表中啟用
-    time.sleep(1)
-    st.experimental_rerun()
