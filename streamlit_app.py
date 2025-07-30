@@ -4,14 +4,21 @@ import time
 import base64
 import os
 
-st.set_page_config(page_title="多任務倒數計時器", layout="centered")
+st.set_page_config(page_title="專注倒數計時器", layout="centered")
 
 # 初始化 session_state
-if "timers" not in st.session_state:
-    st.session_state.timers = {}
-if "focus_timer" not in st.session_state:
-    st.session_state.focus_timer = None
+if "task" not in st.session_state:
+    st.session_state.task = None
+if "start_time" not in st.session_state:
+    st.session_state.start_time = None
+if "duration" not in st.session_state:
+    st.session_state.duration = 0
+if "running" not in st.session_state:
+    st.session_state.running = False
+if "completed" not in st.session_state:
+    st.session_state.completed = False
 
+# 播放聲音
 def play_sound():
     sound_path = os.path.join(os.path.dirname(__file__), "ding.mp3")
     if os.path.exists(sound_path):
@@ -23,85 +30,41 @@ def play_sound():
                 </audio>
             ''', unsafe_allow_html=True)
 
-if st.session_state.focus_timer is None:
-    st.markdown('<meta http-equiv="refresh" content="1">', unsafe_allow_html=True)
-    st.title("⏱️ 多任務倒數計時器")
-    with st.form("add_timer"):
-        name = st.text_input("📝 任務名稱", "")
-        minutes = st.number_input("⏳ 倒數幾分鐘", min_value=1, max_value=120, value=5)
-        submitted = st.form_submit_button("新增任務")
-        if submitted and name:
-            key = f"{name}_{int(time.time())}"
-            st.session_state.timers[key] = {
-                "name": name,
-                "duration": minutes * 60,
-                "remaining": minutes * 60,
-                "running": True,
-                "last_update": time.time(),
-                "completed": False
-            }
+# 使用者輸入
+if not st.session_state.running and not st.session_state.completed:
+    st.title("🎯 專注倒數計時器")
+    with st.form("set_timer"):
+        name = st.text_input("任務名稱", "午餐休息")
+        minutes = st.number_input("倒數時間（分鐘）", min_value=1, max_value=120, value=5)
+        start = st.form_submit_button("開始倒數")
+        if start:
+            st.session_state.task = name
+            st.session_state.duration = int(minutes * 60)
+            st.session_state.start_time = time.time()
+            st.session_state.running = True
 
-def update_timers():
-    for timer in st.session_state.timers.values():
-        if timer["running"] and not timer["completed"]:
-            now = time.time()
-            elapsed = now - timer["last_update"]
-            timer["remaining"] -= elapsed
-            timer["last_update"] = now
-            if timer["remaining"] <= 0:
-                timer["remaining"] = 0
-                timer["running"] = False
-                timer["completed"] = True
-                play_sound()
+# 專注倒數畫面
+if st.session_state.running:
+    st.title(f"🔍 任務：{st.session_state.task}")
+    timer_display = st.empty()
 
-update_timers()
-
-if st.session_state.focus_timer:
-    timer = st.session_state.timers[st.session_state.focus_timer]
-    st.title(f"🔍 專注任務：{timer['name']}")
-    timer_placeholder = st.empty()
-
-    while timer["remaining"] > 0 and timer["running"]:
-        mins, secs = divmod(int(timer["remaining"]), 60)
-        timer_placeholder.markdown(f"<h1 style='text-align:center;font-size:100px'>{mins:02d}:{secs:02d}</h1>", unsafe_allow_html=True)
+    while True:
+        elapsed = int(time.time() - st.session_state.start_time)
+        remaining = st.session_state.duration - elapsed
+        if remaining <= 0:
+            st.session_state.running = False
+            st.session_state.completed = True
+            break
+        mins, secs = divmod(remaining, 60)
+        timer_display.markdown(f"<h1 style='text-align:center;font-size:100px'>{mins:02d}:{secs:02d}</h1>", unsafe_allow_html=True)
         time.sleep(1)
-        update_timers()
 
-    mins, secs = divmod(int(timer["remaining"]), 60)
-    timer_placeholder.markdown(f"<h1 style='text-align:center;font-size:100px'>{mins:02d}:{secs:02d}</h1>", unsafe_allow_html=True)
-    if timer["completed"]:
-        st.success("✅ 任務完成！")
-
-    if st.button("返回任務列表"):
-        st.session_state.focus_timer = None
-        st.stop()
-
-else:
-    remove_list = []
-    for key, timer in st.session_state.timers.items():
-        col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 1])
-        mins, secs = divmod(int(timer["remaining"]), 60)
-        status = "⏳ 進行中" if timer["running"] else ("✅ 完成" if timer["completed"] else "⏸️ 已暫停")
-
-        with col1:
-            st.markdown(f"**{timer['name']}**<br/>{status}<br/><span style='font-size:28px'>{mins:02d}:{secs:02d}</span>", unsafe_allow_html=True)
-        with col2:
-            if st.button("暫停" if timer["running"] else "繼續", key=f"toggle_{key}"):
-                timer["running"] = not timer["running"]
-                timer["last_update"] = time.time()
-        with col3:
-            if st.button("重設", key=f"reset_{key}"):
-                timer["remaining"] = timer["duration"]
-                timer["running"] = False
-                timer["completed"] = False
-                timer["last_update"] = time.time()
-        with col4:
-            if st.button("🔍 放大", key=f"focus_{key}"):
-                st.session_state.focus_timer = key
-                st.stop()
-        with col5:
-            if st.button("❌", key=f"delete_{key}"):
-                remove_list.append(key)
-
-    for key in remove_list:
-        del st.session_state.timers[key]
+# 完成畫面
+if st.session_state.completed:
+    st.balloons()
+    st.success(f"✅ 任務【{st.session_state.task}】倒數結束！")
+    play_sound()
+    if st.button("重新設定任務"):
+        for key in ["task", "start_time", "duration", "running", "completed"]:
+            st.session_state[key] = None
+        st.experimental_rerun()
